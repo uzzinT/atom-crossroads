@@ -3,7 +3,7 @@
 고등학교 1학년 통합과학 개념을 점검하는 방향키 게임입니다.
 원자가 되어 우주를 날아가며, 질문의 정답이 적힌 문으로 들어가면 점수를 얻고 틀린 문이나 가운데 기둥에 부딪히면 생명이 줄어듭니다(생명 3개).
 
-**게임 바로가기:** https://claude.ai/artifact/2mZEWx3w2Yd4fvHakfRytm
+**게임 바로가기:** https://atom-crossroads.vercel.app (로그인 없이 바로 시작)
 
 ## 조작
 
@@ -36,10 +36,15 @@
 
 ## 실행에 대해
 
-`index.html`은 Claude 아티팩트로 만든 페이지입니다. 기록 저장, 방, 교사 모드, 실시간 화면은 Claude 아티팩트의 저장소와 실시간 연결로 동작하므로 **위의 게임 바로가기 링크에서만 모두 작동합니다.** 이 파일을 다른 곳(GitHub Pages 등)에서 열면 화면은 보이지만 방 입장과 기록 저장은 되지 않습니다.
+- `index.html` 한 파일로 동작하며, 기록은 Firebase(Firestore, Realtime Database)에 저장됩니다.
+- 학생과 교사 모두 로그인 화면이 없습니다. 기기마다 Firebase 익명 로그인으로 번호를 받습니다.
+- **교사 기기:** 처음 교사 비밀번호를 넣은 기기가 교사 기기로 등록됩니다. 다른 기기는 교사 기기에서 만든 '기기 추가 코드'로 추가합니다. 학번·본명·오답 기록은 교사 기기만 읽을 수 있도록 Firebase 보안 규칙으로 막혀 있습니다.
+- 같은 컴퓨터를 여러 학생이 쓸 때 다른 학번을 넣으면 새 번호를 받아 기록이 섞이지 않습니다.
+- 교사 기기를 모두 잃어버리면 Firebase 콘솔의 Firestore에서 `config/teacher` 문서를 지운 뒤 다시 교사 비밀번호를 넣으면 됩니다.
 
 ## 출처
 
 - 기본 문항: 2022 개정 교육과정 통합과학 성취기준을 참고해 자체 제작
 - 글꼴: Black Han Sans, Gowun Dodum (Google Fonts, SIL Open Font License)
 - QR 생성: [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT License)
+- 데이터 저장: Firebase JavaScript SDK (Apache License 2.0)
