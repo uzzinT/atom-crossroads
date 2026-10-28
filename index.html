@@ -368,7 +368,6 @@ const ready = (async () => {
   try { db = await window.claude?.use("db"); user = await window.claude?.use("user"); } catch {}
   if (!db || !user) return false;
   uid = await user.id(); isAdmin = await user.canEdit();
-  if (isAdmin) $("lbHead").insertAdjacentHTML("beforeend", "<th>학번·본명</th>");
   db.collection("scores").limit(1000).onSnapshot(s => { rows = s.docs.map(d => ({ id: d.id, ...d.data() })); renderBoard(); },
     () => { $("lbNote").textContent = "순위를 불러오지 못했어요. 새로고침해 보세요."; });
   if (isAdmin) db.collection("names").onSnapshot(s => { names = Object.fromEntries(s.docs.map(d => [d.id, [d.data().sid, d.data().real].filter(Boolean).join(" ")])); renderBoard(); }, () => {});
@@ -405,8 +404,8 @@ function renderBoard() {
   list.forEach((r, i) => {
     if (r.score !== prev) { rank = i + 1; prev = r.score; }
     const tr = body.insertRow(); tr.className = (rank <= 3 ? "r" + rank : "") + (r.id === uid ? " me" : "");
+    // 순위표는 교실 화면에 띄울 수 있으니 순위·캐릭터·점수만. 학번·본명은 교사 모드에서만 보임
     const cells = [[rank, "rank"], [String(r.char || "이름 없음"), ""], [r.score, "pts"]];
-    if (isAdmin) cells.push([names[r.id] || "-", ""]);
     for (const [v, cls] of cells) { const td = tr.insertCell(); td.textContent = v; td.className = cls; }
   });
 }
