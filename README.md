@@ -42,6 +42,113 @@
 - 같은 컴퓨터를 여러 학생이 쓸 때 다른 학번을 넣으면 새 번호를 받아 기록이 섞이지 않습니다.
 - 교사 기기를 모두 잃어버리면 Firebase 콘솔의 Firestore에서 `config/teacher` 문서를 지운 뒤 다시 교사 비밀번호를 넣으면 됩니다.
 
+## 다른 학교에서 쓰기
+
+다른 학교 선생님도 자유롭게 복사해서 쓸 수 있습니다. 학교마다 **자기 Firebase**에 기록이 저장되므로 학생 개인정보가 학교끼리 섞이지 않습니다. 처음 한 번 30분 정도 걸립니다.
+
+### 1. 파일 가져오기
+- 이 저장소 오른쪽 위 **Fork**를 눌러 내 GitHub로 복사합니다. (GitHub를 안 쓰면 `index.html`만 내려받아도 됩니다.)
+
+### 2. Firebase 프로젝트 만들기 (무료)
+1. https://console.firebase.google.com 에서 **프로젝트 추가** → 이름을 정하고 만들기 (Google 애널리틱스는 꺼도 됩니다)
+2. 프로젝트 첫 화면에서 **웹 앱 추가(</>)** → 앱 이름을 넣고 **앱 등록** → 나오는 `firebaseConfig` 값을 메모장에 복사
+3. **빌드 → Authentication → 시작하기 → 로그인 방법 → 익명 → 사용 설정**
+4. **빌드 → Firestore Database → 데이터베이스 만들기** → 위치 `asia-northeast3 (서울)` → 프로덕션 모드
+5. **빌드 → Realtime Database → 데이터베이스 만들기** → 위치 `asia-southeast1 (싱가포르)` → 잠금 모드
+   - 화면 맨 위에 나오는 `https://...firebasedatabase.app` 주소를 복사해 둡니다.
+
+### 3. 보안 규칙 붙여 넣기
+학생의 학번·본명·오답 기록을 교사 기기만 볼 수 있게 막는 부분입니다. **꼭 넣어 주세요.**
+
+**Firestore Database → 규칙** 탭: 원래 내용을 지우고 붙여 넣은 뒤 **게시**
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function teacherPath() { return /databases/$(database)/documents/config/teacher; }
+    function invitePath() { return /databases/$(database)/documents/config/invite; }
+    function isTeacher() { return signedIn() && exists(teacherPath()) && request.auth.uid in get(teacherPath()).data.uids; }
+    function own(id) { return signedIn() && request.auth.uid == id; }
+
+    match /config/teacher {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['uids'])
+        && request.resource.data.uids == [request.auth.uid];
+      allow update: if isTeacher() || (signedIn()
+        && request.resource.data.keys().hasOnly(['uids', 'lastCode'])
+        && request.resource.data.uids == resource.data.uids.concat([request.auth.uid])
+        && exists(invitePath())
+        && request.resource.data.lastCode == get(invitePath()).data.code
+        && request.resource.data.lastCode != resource.data.get('lastCode', '')
+        && get(invitePath()).data.exp > request.time.toMillis());
+      allow delete: if false;
+    }
+    match /config/invite { allow read, write: if isTeacher(); }
+
+    match /units/{id}     { allow read: if signedIn(); allow write: if isTeacher(); }
+    match /rooms/{id}     { allow read: if signedIn(); allow write: if isTeacher(); }
+    match /approvals/{id} { allow read: if signedIn(); allow write: if isTeacher(); }
+    match /scores/{id}    { allow read: if signedIn(); allow write: if own(id) || isTeacher(); }
+
+    match /names/{id}     { allow read, write: if own(id) || isTeacher(); }
+    match /stats/{id}     { allow read, write: if own(id) || isTeacher(); }
+    match /requests/{id}  { allow read, write: if own(id) || isTeacher(); }
+  }
+}
+```
+
+**Realtime Database → 규칙** 탭: 원래 내용을 지우고 붙여 넣은 뒤 **게시**
+
+```json
+{
+  "rules": {
+    "lobby": {
+      ".read": "auth != null",
+      "$uid": { ".write": "auth != null && auth.uid === $uid" }
+    },
+    "score": {
+      "$room": {
+        ".read": "auth != null",
+        "$uid": { ".write": "auth != null && auth.uid === $uid" }
+      }
+    },
+    "screen": {
+      "$room": {
+        ".read": "auth != null",
+        "$uid": { ".write": "auth != null && auth.uid === $uid" }
+      }
+    },
+    "watch": {
+      "$room": { ".read": "auth != null", ".write": "auth != null" }
+    }
+  }
+}
+```
+
+### 4. `index.html`에서 두 군데만 바꾸기
+`index.html`에서 `학교마다 바꿀 곳`을 찾으면 바로 아래에 있습니다. (GitHub에서는 파일을 열고 연필 아이콘으로 고친 뒤 **Commit changes**)
+
+1. `FIREBASE_CONFIG`: 2단계에서 복사한 `firebaseConfig` 값으로 바꿉니다. `databaseURL` 줄이 없으면 Realtime Database 주소를 넣어 추가합니다.
+2. `TEACHER_PASSWORD`: 우리 학교 교사 모드 비밀번호로 바꿉니다.
+
+### 5. 인터넷 주소 만들기 (둘 중 하나)
+- **Vercel:** https://vercel.com 에 GitHub로 로그인 → **Add New → Project** → 내 저장소 고르기 → **Deploy**
+- **GitHub Pages:** 저장소 **Settings → Pages** → Branch를 `main` / `(root)`로 → **Save**
+
+QR 코드와 방 링크는 올린 주소에 맞춰 자동으로 만들어집니다.
+
+### 6. 처음 한 번 (학생에게 링크를 주기 전에)
+1. 내 컴퓨터에서 만든 주소를 열고, 맨 아래 **교사 모드 열기 → 교사 비밀번호**를 넣습니다. 이 기기가 교사 기기로 등록됩니다.
+2. **단원·문제 관리** 탭에서 **기본 단원 6개와 방 7개 넣기**를 누릅니다.
+3. **방 관리** 탭의 QR 코드나 링크를 학생들에게 나눠 줍니다.
+
+### 알아 두기
+- **무료 사용량:** Firebase 무료 요금제(Spark)로 한 학교 수업은 충분합니다. 결제 정보를 넣지 않으면 요금이 나가지 않습니다.
+- **개인정보:** 학번과 본명은 각 학교 Firebase에만 저장되고 그 학교 교사 기기만 볼 수 있습니다. 학교의 개인정보 처리 방침에 맞게 안내해 주세요.
+- **교사 기기를 모두 잃어버렸을 때:** Firebase 콘솔 → Firestore → `config` → `teacher` 문서를 지우고, 새 기기에서 교사 비밀번호를 다시 넣으면 됩니다.
+
 ## 출처
 
 - 기본 문항: 2022 개정 교육과정 통합과학 성취기준을 참고해 자체 제작

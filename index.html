@@ -330,7 +330,7 @@ footer{font-size:12px;color:var(--muted);display:grid;gap:4px}
       </div>
       <div class="box" id="deviceBox">
         <h3 class="sub">다른 기기를 교사 기기로 추가</h3>
-        <p class="note">교실 컴퓨터처럼 다른 기기에서도 교사 모드를 쓰려면, 그 기기에서 9851을 넣은 뒤 아래 코드를 입력하세요. 코드는 10분 동안 한 번만 쓸 수 있어요.</p>
+        <p class="note">교실 컴퓨터처럼 다른 기기에서도 교사 모드를 쓰려면, 그 기기에서 교사 비밀번호를 넣은 뒤 아래 코드를 입력하세요. 코드는 10분 동안 한 번만 쓸 수 있어요.</p>
         <div class="grp"><button type="button" id="inviteMake">기기 추가 코드 만들기</button><b class="roomtag" id="inviteCode" aria-live="polite"></b></div>
       </div>
       <div class="keep"><button type="button" id="tClose">교사 모드 닫기</button></div>
@@ -354,7 +354,23 @@ footer{font-size:12px;color:var(--muted);display:grid;gap:4px}
 </div>
 
 <script>
-const BASE = "https://atom-crossroads.vercel.app/"; // QR이 가리키는 이 페이지 주소
+// ================= 학교마다 바꿀 곳 (README의 '다른 학교에서 쓰기' 참고) =================
+// 1) Firebase 콘솔 > 프로젝트 설정 > 내 앱 > 'SDK 설정 및 구성'의 firebaseConfig 값을 그대로 붙여 넣기
+//    databaseURL이 없으면 Realtime Database 화면 맨 위의 주소(https://...firebasedatabase.app)를 직접 넣기
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCCR_IHq-pITT-Crd8ccWKU5cQJggltDjQ",
+  authDomain: "test-4be3b.firebaseapp.com",
+  databaseURL: "https://test-4be3b-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "test-4be3b",
+  storageBucket: "test-4be3b.firebasestorage.app",
+  messagingSenderId: "872134936513",
+  appId: "1:872134936513:web:ef105efd4579f105f81140",
+};
+// 2) 교사 모드 비밀번호. 코드에 보이는 값이라 학생 기록은 이 비밀번호가 아니라 '교사 기기 등록'과 보안 규칙이 지킴
+const TEACHER_PASSWORD = "9851";
+// ==========================================================================================
+
+const BASE = location.href.split(/[?#]/)[0]; // QR이 가리키는 이 페이지 주소(어디에 올려도 자동)
 const $ = id => document.getElementById(id);
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
@@ -373,15 +389,7 @@ function qrSvg(text) {
 // ---------- Firebase ----------
 // 로그인 화면 없이 익명 로그인으로 기기마다 고유 번호(uid)를 받음. 누가 무엇을 읽고 쓰는지는 Firebase 보안 규칙이 막음
 const fbOk = typeof firebase !== "undefined";
-if (fbOk) firebase.initializeApp({
-  apiKey: "AIzaSyCCR_IHq-pITT-Crd8ccWKU5cQJggltDjQ",
-  authDomain: "test-4be3b.firebaseapp.com",
-  databaseURL: "https://test-4be3b-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "test-4be3b",
-  storageBucket: "test-4be3b.firebasestorage.app",
-  messagingSenderId: "872134936513",
-  appId: "1:872134936513:web:ef105efd4579f105f81140",
-});
+if (fbOk) firebase.initializeApp(FIREBASE_CONFIG);
 const auth = fbOk ? firebase.auth() : null, rtdb = fbOk ? firebase.database() : null;
 const NET_ERR = "서버에 연결하지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.";
 
@@ -965,19 +973,13 @@ $("againBtn").onclick = () => {
 $("editBtn").onclick = () => { $("endPanel").hidden = true; $("startPanel").hidden = false; $("char").focus(); };
 
 // ---------- 교사 모드 ----------
-// 비밀번호는 화면 입구일 뿐이고, 학생 기록·방·문제 수정은 db 규칙상 편집 권한 계정만 가능
-const PW_HASH = "caf8135c0f01e2a33aebfa0e31c46b24de456f39514e112fa4d6915de1f094a6";
-async function sha256(s) {
-  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
-}
+// 비밀번호는 화면 입구일 뿐이고, 학생 기록·방·문제 수정은 보안 규칙상 교사 기기만 가능
 let units = {}, rooms = {}, stats = {}, subs = [], editing = null;
 
 $("tOpen").onclick = () => { $("tOpen").hidden = true; $("tGate").hidden = false; $("tPw").focus(); };
 $("tGate").addEventListener("submit", async e => {
   e.preventDefault();
-  let ok = false; try { ok = await sha256($("tPw").value.trim()) === PW_HASH; } catch {}
-  if (!ok) { $("tErr").textContent = "비밀번호가 맞지 않아요."; $("tPw").select(); return; }
+  if ($("tPw").value.trim() !== TEACHER_PASSWORD) { $("tErr").textContent = "비밀번호가 맞지 않아요."; $("tPw").select(); return; }
   $("tErr").textContent = ""; $("tPw").value = ""; $("tGate").hidden = true; $("tPanel").hidden = false;
   openTeacher();
 });
@@ -989,7 +991,7 @@ document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
   document.querySelectorAll("[data-view]").forEach(o => { o.setAttribute("aria-selected", o === b); $(o.dataset.view).hidden = o !== b; });
 });
 
-// 처음 9851을 넣은 기기를 교사 기기로 등록. 이미 등록돼 있으면 등록된 기기인지 확인
+// 처음 교사 비밀번호를 넣은 기기를 교사 기기로 등록. 이미 등록돼 있으면 등록된 기기인지 확인
 async function claimTeacher() {
   const ref = db.doc("config/teacher");
   try {
